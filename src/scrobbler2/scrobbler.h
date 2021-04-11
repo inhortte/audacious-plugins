@@ -26,6 +26,9 @@
 #define SCROBBLER_SHARED_SECRET "716cc0a784bb62835de5bd674e65eb57"
 #define SCROBBLER_URL "https://ws.audioscrobbler.com/2.0/"
 
+#define MALOJA_API_KEY "d8QZr1uLvJaLsxB1O2l70dgvAiSq7M0tDy3os2sz4Q0GSo8ihBiHuxqsDAnXVjAS"
+#define MALOJA_URL "https://maloja.flavigula.net/apis/mlj_1/newscrobble"
+
 
 extern const PluginPreferences configuration;
 

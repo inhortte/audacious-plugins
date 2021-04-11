@@ -77,6 +77,37 @@ static char * scrobbler_get_signature (Index<API_Parameter> & params)
  *
  * Returns nullptr if an error occurrs
  */
+static String create_message_to_maloja (int n_args, ...)
+{
+    Index<API_Parameter> params;
+    StringBuf buf (0);
+    va_list vl;
+    va_start (vl, n_args);
+
+    for (int i = 0; i < n_args; i ++)
+    {
+        const char * name = va_arg (vl, const char *);
+        const char * arg = va_arg (vl, const char *);
+
+        params.append (String (name), String (arg));
+
+        char * esc = curl_easy_escape (curlHandle, arg, 0);
+        buf.insert (-1, "&");
+        buf.insert (-1, name);
+        buf.insert (-1, "=");
+        buf.insert (-1, esc ? esc : "");
+        curl_free (esc);
+    }
+
+    va_end (vl);
+
+    buf.insert(-1, "&key=");
+    buf.insert(-1, MALOJA_API_KEY);
+
+    AUDDBG ("FINAL message: %s.\n", (const char *) buf);
+
+    return String (buf);
+}
 static String create_message_to_lastfm (const char * method_name, int n_args, ...)
 {
     Index<API_Parameter> params;
@@ -117,11 +148,26 @@ static String create_message_to_lastfm (const char * method_name, int n_args, ..
 static gboolean send_message_to_lastfm (const char * data)
 {
     AUDDBG("This message will be sent to last.fm:\n%s\n%%%%End of message%%%%\n", data);//Enter?\n", data);
+    curl_easy_setopt(curlHandle, CURLOPT_URL, SCROBBLER_URL);
     curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, data);
     CURLcode curl_requests_result = curl_easy_perform(curlHandle);
 
     if (curl_requests_result != CURLE_OK) {
         AUDERR("Could not communicate with last.fm: %s.\n", curl_easy_strerror(curl_requests_result));
+        return false;
+    }
+
+    return true;
+}
+
+static gboolean send_message_to_maloja (const char * data)
+{
+    AUDDBG("This message will be sent to maloja.flavigula.net:\n%s\n%%%%End of message%%%%\n", data);//Enter?\n", data);
+    curl_easy_setopt(curlHandle, CURLOPT_URL, MALOJA_URL);
+    curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, data);
+    CURLcode curl_requests_result = curl_easy_perform(curlHandle);
+    if (curl_requests_result != CURLE_OK) {
+        AUDERR("Could not communicate with maloja.flavigula.net: %s.\n", curl_easy_strerror(curl_requests_result));
         return false;
     }
 
@@ -266,11 +312,13 @@ gboolean scrobbler_communication_init() {
         return false;
     }
 
+    /*
     curl_requests_result = curl_easy_setopt(curlHandle, CURLOPT_URL, SCROBBLER_URL);
     if (curl_requests_result != CURLE_OK) {
         AUDDBG("Could not define scrobbler destination URL: %s.\n", curl_easy_strerror(curl_requests_result));
         return false;
     }
+    */
 
     curl_requests_result = curl_easy_setopt(curlHandle, CURLOPT_WRITEFUNCTION, result_callback);
     if (curl_requests_result != CURLE_OK) {
@@ -424,7 +472,12 @@ static void scrobble_cached_queue() {
                  "timestamp", line[6],
                  "albumArtist", line[7] != nullptr ? line[7] : "",  //in case cache uses old format without album artist field
                  "api_key", SCROBBLER_API_KEY, "sk", (const char *) session_key);
+                String malojamsg = create_message_to_maloja (4,
+                    "artist", line[0], "album", line[1], "title", line[2], "duration", line[4]);
 
+                if (send_message_to_maloja(malojamsg) == true) {
+                  // Let's assume it worked for now
+                }
                 if (send_message_to_lastfm(scrobblemsg) == true) {
                     String error_code;
                     String error_detail;
